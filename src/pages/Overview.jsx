@@ -116,24 +116,31 @@ export default function Overview() {
       color: b.max <= 20 ? '#94a3b8' : b.max <= 50 ? '#60a5fa' : b.max <= 100 ? '#f97316' : '#ef4444',
     }))
 
-    // Behavior aggregation per group
-    const behaviorStats = {}
-    for (const g of GROUPS) {
-      const users = groups[g.key] || []
+    // Helper to aggregate behaviors from a field name
+    function aggBehaviors(users, field) {
       const agg = {}
       for (const ev of BEHAVIOR_EVENTS) {
         let total = 0, activeCount = 0
         for (const u of users) {
-          const cnt = (u.behaviors || {})[ev.key] || 0
+          const cnt = (u[field] || {})[ev.key] || 0
           total += cnt
           if (cnt > 0) activeCount++
         }
         agg[ev.key] = { total, activeCount, avgPerActive: activeCount > 0 ? Math.round(total / activeCount * 10) / 10 : 0 }
       }
-      behaviorStats[g.key] = agg
+      return agg
     }
 
-    // Overall behavior
+    // Behavior aggregation per group (30d + all-time)
+    const behaviorStats = {}
+    const behaviorStatsAll = {}
+    for (const g of GROUPS) {
+      const users = groups[g.key] || []
+      behaviorStats[g.key] = aggBehaviors(users, 'behaviors')
+      behaviorStatsAll[g.key] = aggBehaviors(users, 'behaviorsAll')
+    }
+
+    // Overall behavior (30d)
     const overallBehavior = BEHAVIOR_EVENTS.map(ev => {
       let total = 0, active = 0
       for (const u of all) {
@@ -144,7 +151,18 @@ export default function Overview() {
       return { ...ev, total, active, pct: totalUsers > 0 ? Math.round(active / totalUsers * 100) : 0 }
     })
 
-    return { groups, totalUsers, totalRevenue, revDist, overallRevDist, behaviorStats, overallBehavior }
+    // Overall behavior (all-time)
+    const overallBehaviorAll = BEHAVIOR_EVENTS.map(ev => {
+      let total = 0, active = 0
+      for (const u of all) {
+        const cnt = (u.behaviorsAll || {})[ev.key] || 0
+        total += cnt
+        if (cnt > 0) active++
+      }
+      return { ...ev, total, active, pct: totalUsers > 0 ? Math.round(active / totalUsers * 100) : 0 }
+    })
+
+    return { groups, totalUsers, totalRevenue, revDist, overallRevDist, behaviorStats, behaviorStatsAll, overallBehavior, overallBehaviorAll }
   }, [data])
 
   if (loading) {
@@ -219,9 +237,55 @@ export default function Overview() {
         ))}
       </div>
 
-      {/* Behavior overview */}
+      {/* Behavior overview - All time */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-        <h3 className="text-sm font-bold text-gray-700 mb-4">📊 活跃行为分布（近30天）</h3>
+        <h3 className="text-sm font-bold text-gray-700 mb-4">📊 全量行为分布（激活至今）</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {stats.overallBehaviorAll.map(ev => (
+            <div key={ev.key} className="text-center p-3 rounded-xl bg-orange-50">
+              <div className="text-xl mb-1">{ev.emoji}</div>
+              <div className="text-lg font-bold text-gray-800">{ev.total.toLocaleString()}</div>
+              <div className="text-xs text-gray-500">{ev.label}</div>
+              <div className="text-xs text-gray-400 mt-1">{ev.active}人 · {ev.pct}%参与</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Per-group behavior comparison - All time */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 overflow-x-auto">
+        <h3 className="text-sm font-bold text-gray-700 mb-4">📈 分组行为对比（全量）</h3>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-200">
+              <th className="text-left py-2 px-3 text-gray-500 font-medium">行为</th>
+              {GROUPS.map(g => (
+                <th key={g.key} className="text-center py-2 px-3 text-gray-500 font-medium">{g.emoji} {g.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {BEHAVIOR_EVENTS.map(ev => (
+              <tr key={ev.key} className="border-b border-gray-50 hover:bg-gray-50">
+                <td className="py-2.5 px-3 text-gray-700">{ev.emoji} {ev.label}</td>
+                {GROUPS.map(g => {
+                  const s = stats.behaviorStatsAll[g.key]?.[ev.key] || {}
+                  return (
+                    <td key={g.key} className="text-center py-2.5 px-3">
+                      <div className="font-medium text-gray-800">{(s.total || 0).toLocaleString()}</div>
+                      <div className="text-xs text-gray-400">{s.activeCount || 0}人 · 人均{s.avgPerActive || 0}</div>
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Behavior overview - 30 days */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+        <h3 className="text-sm font-bold text-gray-700 mb-4">📊 近30天行为分布</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {stats.overallBehavior.map(ev => (
             <div key={ev.key} className="text-center p-3 rounded-xl bg-gray-50">
@@ -234,7 +298,7 @@ export default function Overview() {
         </div>
       </div>
 
-      {/* Per-group behavior comparison table */}
+      {/* Per-group behavior comparison - 30 days */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 overflow-x-auto">
         <h3 className="text-sm font-bold text-gray-700 mb-4">📈 分组行为对比（近30天）</h3>
         <table className="w-full text-sm">

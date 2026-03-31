@@ -50,9 +50,13 @@ hogql "SELECT distinct_id, event, timestamp, properties.product_id as product_id
 echo "Fetching device info..."
 hogql 'SELECT distinct_id, properties.$device_model FROM events WHERE event IN ('"'"'app_opened'"'"', '"'"'photo_taken'"'"') AND timestamp > now() - INTERVAL 90 DAY AND properties.$device_model IS NOT NULL ORDER BY timestamp DESC LIMIT 20000' > /tmp/ph_devices.json
 
-# 4. Fetch behavior events (last 30 days) - photo_taken, ai_framing_on, ai_voice_play, app_activated, final_page_save_success per user
-echo "Fetching behavior stats..."
+# 4. Fetch behavior events (last 30 days)
+echo "Fetching behavior stats (30d)..."
 hogql "SELECT distinct_id, event, count() as cnt FROM events WHERE event IN ('photo_taken','ai_framing_on','ai_voice_play','app_activated','final_page_save_success','home_reimagine_click') AND timestamp > now() - INTERVAL 30 DAY GROUP BY distinct_id, event LIMIT 50000" > /tmp/ph_behaviors.json
+
+# 4b. Fetch behavior events (all time)
+echo "Fetching behavior stats (all time)..."
+hogql "SELECT distinct_id, event, count() as cnt FROM events WHERE event IN ('photo_taken','ai_framing_on','ai_voice_play','app_activated','final_page_save_success','home_reimagine_click') GROUP BY distinct_id, event LIMIT 100000" > /tmp/ph_behaviors_all.json
 
 # 5. Process into groups using node
 echo "Processing data..."
@@ -64,11 +68,13 @@ const payments = JSON.parse(fs.readFileSync('/tmp/ph_payments.json', 'utf8'));
 const devices = JSON.parse(fs.readFileSync('/tmp/ph_devices.json', 'utf8'));
 
 const behaviors = JSON.parse(fs.readFileSync('/tmp/ph_behaviors.json', 'utf8'));
+const behaviorsAll = JSON.parse(fs.readFileSync('/tmp/ph_behaviors_all.json', 'utf8'));
 
 const personRows = persons.results || [];
 const paymentRows = payments.results || [];
 const deviceRows = devices.results || [];
 const behaviorRows = behaviors.results || [];
+const behaviorAllRows = behaviorsAll.results || [];
 
 // Build device map (first occurrence = latest due to ORDER BY timestamp DESC)
 const deviceMap = {};
@@ -97,6 +103,13 @@ for (const [did, event, cnt] of behaviorRows) {
   userBehaviors[did][event] = parseInt(cnt) || 0;
 }
 
+// Build all-time behavior stats per user
+const userBehaviorsAll = {};
+for (const [did, event, cnt] of behaviorAllRows) {
+  if (!userBehaviorsAll[did]) userBehaviorsAll[did] = {};
+  userBehaviorsAll[did][event] = parseInt(cnt) || 0;
+}
+
 // Categorize users — all paying users regardless of subscription status
 const highValue = [];
 const annual = [];
@@ -111,7 +124,8 @@ for (const [did, status, country, countryCode] of personRows) {
   const device = deviceMap[did] || '';
 
   const beh = userBehaviors[did] || {};
-  const user = { id: did, status, payCount: cnt, revenue: Math.round(rev * 100) / 100, productId: latestProduct[did] || '', country: country || '', countryCode: countryCode || '', device, behaviors: beh };
+  const behAll = userBehaviorsAll[did] || {};
+  const user = { id: did, status, payCount: cnt, revenue: Math.round(rev * 100) / 100, productId: latestProduct[did] || '', country: country || '', countryCode: countryCode || '', device, behaviors: beh, behaviorsAll: behAll };
 
   if (cnt > 5) {
     highValue.push(user);
