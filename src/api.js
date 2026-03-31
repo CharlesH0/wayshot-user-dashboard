@@ -36,7 +36,7 @@ async function hogql(query) {
 // Fetch all core events for a user (live query)
 export async function fetchUserEvents(userId, limit = 1000) {
   const escaped = userId.replace(/'/g, "\\'");
-  const q = `SELECT event, timestamp, properties.filter_name as filter_name, properties.product_id as product_id, properties.revenue as revenue FROM events WHERE distinct_id = '${escaped}' AND event IN ('photo_taken','home_reimagine_click','rc_initial_purchase_event','rc_trial_converted_event','rc_renewal_event','rc_non_subscription_purchase_event','final_page_save_success') ORDER BY timestamp DESC LIMIT ${limit}`;
+  const q = `SELECT event, timestamp, properties.filter_name as filter_name, properties.product_id as product_id, properties.revenue as revenue FROM events WHERE distinct_id = '${escaped}' AND event IN ('photo_taken','home_reimagine_click','rc_initial_purchase_event','rc_trial_converted_event','rc_renewal_event','rc_non_subscription_purchase_event','final_page_save_success','app_activated','ai_framing_on') ORDER BY timestamp DESC LIMIT ${limit}`;
   return hogql(q);
 }
 

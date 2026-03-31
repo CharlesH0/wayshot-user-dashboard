@@ -83,6 +83,7 @@ export default function UserDetail() {
       const dateKey = formatDate(time)
       if (!dateMap[dateKey]) dateMap[dateKey] = {
         date: dateKey, photos: 0, saves: 0, uploads: 0,
+        activations: 0, framings: 0,
         payments: [], totalEvents: 0, firstTime: time, lastTime: time,
         hasFilter: 0, noFilter: 0
       }
@@ -96,6 +97,10 @@ export default function UserDetail() {
         d.saves++
       } else if (event === 'home_reimagine_click') {
         d.uploads++
+      } else if (event === 'app_activated') {
+        d.activations++
+      } else if (event === 'ai_framing_on') {
+        d.framings++
       } else if (PAY_EVENTS.has(event)) {
         d.payments.push({ label: PAY_LABELS[event] || event, revenue: parseFloat(revenue) || 0, productId: productId || '' })
       }
@@ -209,12 +214,14 @@ export default function UserDetail() {
                   <span className="text-xs text-gray-400">{d.totalEvents} 事件</span>
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs">
+                  {d.activations > 0 && <span className="text-sky-600">🚀 激活 {d.activations}次</span>}
                   {d.photos > 0 && (
                     <span className="text-blue-600">
                       📸 拍照 {d.photos}张
                       {d.hasFilter > 0 && <span className="text-blue-400 ml-1">({d.hasFilter}张用滤镜)</span>}
                     </span>
                   )}
+                  {d.framings > 0 && <span className="text-indigo-600">🎯 构图 {d.framings}次</span>}
                   {d.uploads > 0 && <span className="text-purple-600">🖼️ 上传 {d.uploads}张</span>}
                   {d.saves > 0 && <span className="text-green-600">💾 保存 {d.saves}张</span>}
                   {d.payments.map((pay, pi) => (
