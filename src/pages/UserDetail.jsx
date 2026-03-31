@@ -83,7 +83,7 @@ export default function UserDetail() {
       const dateKey = formatDate(time)
       if (!dateMap[dateKey]) dateMap[dateKey] = {
         date: dateKey, photos: 0, saves: 0, uploads: 0,
-        activations: 0, framings: 0,
+        activations: 0, framings: 0, voicePlays: 0,
         payments: [], totalEvents: 0, firstTime: time, lastTime: time,
         hasFilter: 0, noFilter: 0
       }
@@ -101,6 +101,8 @@ export default function UserDetail() {
         d.activations++
       } else if (event === 'ai_framing_on') {
         d.framings++
+      } else if (event === 'ai_voice_play') {
+        d.voicePlays++
       } else if (PAY_EVENTS.has(event)) {
         d.payments.push({ label: PAY_LABELS[event] || event, revenue: parseFloat(revenue) || 0, productId: productId || '' })
       }
@@ -222,6 +224,7 @@ export default function UserDetail() {
                     </span>
                   )}
                   {d.framings > 0 && <span className="text-indigo-600">🎯 构图 {d.framings}次</span>}
+                  {d.voicePlays > 0 && <span className="text-teal-600">🎙️ 语音 {d.voicePlays}次</span>}
                   {d.uploads > 0 && <span className="text-purple-600">🖼️ 上传 {d.uploads}张</span>}
                   {d.saves > 0 && <span className="text-green-600">💾 保存 {d.saves}张</span>}
                   {d.payments.map((pay, pi) => (
