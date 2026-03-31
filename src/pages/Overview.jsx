@@ -17,10 +17,11 @@ const REV_BUCKETS = [
 ]
 
 const BEHAVIOR_EVENTS = [
-  { key: 'photo_taken', label: '拍照', emoji: '📸' },
+  { key: 'photo_with_filter', label: '有滤镜拍照', emoji: '📸' },
+  { key: 'photo_no_filter', label: '无滤镜拍照', emoji: '📷' },
   { key: 'ai_framing_on', label: 'AI构图', emoji: '🎯' },
   { key: 'ai_voice_play', label: 'AI语音', emoji: '🎙️' },
-  { key: 'user_speaks_over', label: '用户主动说话', emoji: '🗣️' },
+
   { key: 'app_activated', label: '激活', emoji: '📱' },
   { key: 'final_page_save_success', label: '保存成片', emoji: '💾' },
   { key: 'home_reimagine_click', label: 'Reimagine', emoji: '✨' },
