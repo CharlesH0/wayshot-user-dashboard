@@ -8,7 +8,7 @@ let cachedData = null;
 
 export async function loadCachedUsers() {
   if (cachedData) return cachedData;
-  const res = await fetch('/data/users.json');
+  const res = await fetch('/data/users.json', { cache: 'no-cache' });
   if (!res.ok) throw new Error('无法加载用户数据缓存，请先运行 sync-data.sh');
   cachedData = await res.json();
   return cachedData;
