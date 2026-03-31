@@ -20,19 +20,10 @@ const BEHAVIOR_EVENTS = [
   { key: 'photo_taken', label: '拍照', emoji: '📸' },
   { key: 'ai_framing_on', label: 'AI构图', emoji: '🎯' },
   { key: 'ai_voice_play', label: 'AI语音', emoji: '🎙️' },
-  { key: 'user_speaks_intent_reconginized', label: '用户主动说话', emoji: '🗣️' },
+  { key: 'user_speaks_over', label: '用户主动说话', emoji: '🗣️' },
   { key: 'app_activated', label: '激活', emoji: '📱' },
   { key: 'final_page_save_success', label: '保存成片', emoji: '💾' },
   { key: 'home_reimagine_click', label: 'Reimagine', emoji: '✨' },
-]
-
-const INTENT_TYPES = [
-  { key: 'small_talk', label: '闲聊', emoji: '💬', color: '#f97316' },
-  { key: 'none', label: '未识别', emoji: '❓', color: '#94a3b8' },
-  { key: 'parameter_adjustment', label: '参数调整', emoji: '⚙️', color: '#3b82f6' },
-  { key: 'composition_guidance', label: '构图指导', emoji: '📐', color: '#8b5cf6' },
-  { key: 'filter_recommendation', label: '滤镜推荐', emoji: '🎨', color: '#ec4899' },
-  { key: 'pose_guidance', label: '姿势指导', emoji: '🧍', color: '#10b981' },
 ]
 
 function StatCard({ emoji, label, value, sub, color = 'orange', to }) {
@@ -172,50 +163,7 @@ export default function Overview() {
       return { ...ev, total, active, pct: totalUsers > 0 ? Math.round(active / totalUsers * 100) : 0 }
     })
 
-    // Intent aggregation (all-time + 30d)
-    function aggIntents(users, field) {
-      const agg = {}
-      for (const it of INTENT_TYPES) {
-        let total = 0, activeCount = 0
-        for (const u of users) {
-          const cnt = (u[field] || {})[it.key] || 0
-          total += cnt
-          if (cnt > 0) activeCount++
-        }
-        agg[it.key] = { total, activeCount }
-      }
-      return agg
-    }
-
-    const intentStatsAll = {}
-    const intentStats30d = {}
-    for (const g of GROUPS) {
-      const users = groups[g.key] || []
-      intentStatsAll[g.key] = aggIntents(users, 'intentsAll')
-      intentStats30d[g.key] = aggIntents(users, 'intents30d')
-    }
-
-    const overallIntentsAll = INTENT_TYPES.map(it => {
-      let total = 0, active = 0
-      for (const u of all) {
-        const cnt = (u.intentsAll || {})[it.key] || 0
-        total += cnt
-        if (cnt > 0) active++
-      }
-      return { ...it, total, active }
-    })
-
-    const overallIntents30d = INTENT_TYPES.map(it => {
-      let total = 0, active = 0
-      for (const u of all) {
-        const cnt = (u.intents30d || {})[it.key] || 0
-        total += cnt
-        if (cnt > 0) active++
-      }
-      return { ...it, total, active }
-    })
-
-    return { groups, totalUsers, totalRevenue, revDist, overallRevDist, behaviorStats, behaviorStatsAll, overallBehavior, overallBehaviorAll, intentStatsAll, intentStats30d, overallIntentsAll, overallIntents30d }
+    return { groups, totalUsers, totalRevenue, revDist, overallRevDist, behaviorStats, behaviorStatsAll, overallBehavior, overallBehaviorAll }
   }, [data])
 
   if (loading) {
@@ -380,139 +328,6 @@ export default function Overview() {
             ))}
           </tbody>
         </table>
-      </div>
-
-      {/* === Intent Analysis Module === */}
-      <div className="border-t border-gray-200 pt-8">
-        <h2 className="text-lg font-bold text-gray-800 mb-6">🗣️ 用户主动对话 · 意图分析</h2>
-
-        {/* Intent overview - All time */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">
-          <h3 className="text-sm font-bold text-gray-700 mb-4">全量意图分布（激活至今）</h3>
-          {(() => {
-            const totalAll = stats.overallIntentsAll.reduce((s, it) => s + it.total, 0)
-            return (
-              <>
-                <div className="text-sm text-gray-500 mb-4">共 {totalAll.toLocaleString()} 次对话</div>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-                  {stats.overallIntentsAll.map(it => (
-                    <div key={it.key} className="text-center p-3 rounded-xl" style={{ backgroundColor: it.color + '10' }}>
-                      <div className="text-xl mb-1">{it.emoji}</div>
-                      <div className="text-lg font-bold text-gray-800">{it.total.toLocaleString()}</div>
-                      <div className="text-xs text-gray-500">{it.label}</div>
-                      <div className="text-xs mt-1" style={{ color: it.color }}>{totalAll > 0 ? (it.total / totalAll * 100).toFixed(1) : 0}%</div>
-                      <div className="text-xs text-gray-400">{it.active}人参与</div>
-                    </div>
-                  ))}
-                </div>
-                {/* Horizontal stacked bar */}
-                <div className="h-6 rounded-full overflow-hidden flex">
-                  {stats.overallIntentsAll.filter(it => it.total > 0).map(it => (
-                    <div
-                      key={it.key}
-                      className="h-full transition-all relative group"
-                      style={{ width: `${(it.total / totalAll * 100)}%`, backgroundColor: it.color }}
-                      title={`${it.label}: ${it.total.toLocaleString()} (${(it.total / totalAll * 100).toFixed(1)}%)`}
-                    />
-                  ))}
-                </div>
-                <div className="flex flex-wrap gap-3 mt-2">
-                  {stats.overallIntentsAll.filter(it => it.total > 0).map(it => (
-                    <span key={it.key} className="flex items-center gap-1 text-xs text-gray-500">
-                      <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: it.color }} />
-                      {it.label}
-                    </span>
-                  ))}
-                </div>
-              </>
-            )
-          })()}
-        </div>
-
-        {/* Intent per-group comparison - All time */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 overflow-x-auto mb-6">
-          <h3 className="text-sm font-bold text-gray-700 mb-4">分组意图对比（全量）</h3>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-2 px-3 text-gray-500 font-medium">意图</th>
-                {GROUPS.map(g => (
-                  <th key={g.key} className="text-center py-2 px-3 text-gray-500 font-medium">{g.emoji} {g.label}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {INTENT_TYPES.map(it => (
-                <tr key={it.key} className="border-b border-gray-50 hover:bg-gray-50">
-                  <td className="py-2.5 px-3 text-gray-700">{it.emoji} {it.label}</td>
-                  {GROUPS.map(g => {
-                    const s = stats.intentStatsAll[g.key]?.[it.key] || {}
-                    return (
-                      <td key={g.key} className="text-center py-2.5 px-3">
-                        <div className="font-medium text-gray-800">{(s.total || 0).toLocaleString()}</div>
-                        <div className="text-xs text-gray-400">{s.activeCount || 0}人</div>
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Intent overview - 30 days */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">
-          <h3 className="text-sm font-bold text-gray-700 mb-4">近30天意图分布</h3>
-          {(() => {
-            const total30 = stats.overallIntents30d.reduce((s, it) => s + it.total, 0)
-            return (
-              <>
-                <div className="text-sm text-gray-500 mb-4">共 {total30.toLocaleString()} 次对话</div>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-                  {stats.overallIntents30d.map(it => (
-                    <div key={it.key} className="text-center p-3 rounded-xl bg-gray-50">
-                      <div className="text-xl mb-1">{it.emoji}</div>
-                      <div className="text-lg font-bold text-gray-800">{it.total.toLocaleString()}</div>
-                      <div className="text-xs text-gray-500">{it.label}</div>
-                      <div className="text-xs text-gray-400 mt-1">{total30 > 0 ? (it.total / total30 * 100).toFixed(1) : 0}% · {it.active}人</div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )
-          })()}
-        </div>
-
-        {/* Intent per-group comparison - 30 days */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 overflow-x-auto">
-          <h3 className="text-sm font-bold text-gray-700 mb-4">分组意图对比（近30天）</h3>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-2 px-3 text-gray-500 font-medium">意图</th>
-                {GROUPS.map(g => (
-                  <th key={g.key} className="text-center py-2 px-3 text-gray-500 font-medium">{g.emoji} {g.label}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {INTENT_TYPES.map(it => (
-                <tr key={it.key} className="border-b border-gray-50 hover:bg-gray-50">
-                  <td className="py-2.5 px-3 text-gray-700">{it.emoji} {it.label}</td>
-                  {GROUPS.map(g => {
-                    const s = stats.intentStats30d[g.key]?.[it.key] || {}
-                    return (
-                      <td key={g.key} className="text-center py-2.5 px-3">
-                        <div className="font-medium text-gray-800">{(s.total || 0).toLocaleString()}</div>
-                        <div className="text-xs text-gray-400">{s.activeCount || 0}人</div>
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </div>
     </div>
   )
