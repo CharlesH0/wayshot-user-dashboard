@@ -52,11 +52,19 @@ hogql 'SELECT distinct_id, properties.$device_model FROM events WHERE event IN (
 
 # 4. Fetch behavior events (last 30 days) — only for paying users
 echo "Fetching behavior stats (30d, paying users only)..."
-hogql "SELECT e.distinct_id, e.event, count() as cnt FROM events e INNER JOIN person_distinct_ids pdi ON pdi.distinct_id = e.distinct_id INNER JOIN persons p ON p.id = pdi.person_id WHERE e.event IN ('photo_taken','ai_framing_on','ai_voice_play','user_speaks_over','app_activated','final_page_save_success','home_reimagine_click') AND e.timestamp > now() - INTERVAL 30 DAY AND p.properties.rc_subscription_status IS NOT NULL GROUP BY e.distinct_id, e.event LIMIT 50000" > /tmp/ph_behaviors.json
+hogql "SELECT e.distinct_id, e.event, count() as cnt FROM events e INNER JOIN person_distinct_ids pdi ON pdi.distinct_id = e.distinct_id INNER JOIN persons p ON p.id = pdi.person_id WHERE e.event IN ('photo_taken','ai_framing_on','ai_voice_play','user_speaks_intent_reconginized','app_activated','final_page_save_success','home_reimagine_click') AND e.timestamp > now() - INTERVAL 30 DAY AND p.properties.rc_subscription_status IS NOT NULL GROUP BY e.distinct_id, e.event LIMIT 50000" > /tmp/ph_behaviors.json
 
 # 4b. Fetch behavior events (all time) — only for users with subscription status (paying users)
 echo "Fetching behavior stats (all time, paying users only)..."
-hogql "SELECT e.distinct_id, e.event, count() as cnt FROM events e INNER JOIN person_distinct_ids pdi ON pdi.distinct_id = e.distinct_id INNER JOIN persons p ON p.id = pdi.person_id WHERE e.event IN ('photo_taken','ai_framing_on','ai_voice_play','user_speaks_over','app_activated','final_page_save_success','home_reimagine_click') AND p.properties.rc_subscription_status IS NOT NULL GROUP BY e.distinct_id, e.event LIMIT 50000" > /tmp/ph_behaviors_all.json
+hogql "SELECT e.distinct_id, e.event, count() as cnt FROM events e INNER JOIN person_distinct_ids pdi ON pdi.distinct_id = e.distinct_id INNER JOIN persons p ON p.id = pdi.person_id WHERE e.event IN ('photo_taken','ai_framing_on','ai_voice_play','user_speaks_intent_reconginized','app_activated','final_page_save_success','home_reimagine_click') AND p.properties.rc_subscription_status IS NOT NULL GROUP BY e.distinct_id, e.event LIMIT 50000" > /tmp/ph_behaviors_all.json
+
+# 4c. Fetch user_speaks_intent_reconginized breakdown by intent (all time, paying users)
+echo "Fetching intent breakdown (all time)..."
+hogql "SELECT e.distinct_id, e.properties.intent as intent, count() as cnt FROM events e INNER JOIN person_distinct_ids pdi ON pdi.distinct_id = e.distinct_id INNER JOIN persons p ON p.id = pdi.person_id WHERE e.event = 'user_speaks_intent_reconginized' AND p.properties.rc_subscription_status IS NOT NULL GROUP BY e.distinct_id, intent LIMIT 50000" > /tmp/ph_intents_all.json
+
+# 4d. Fetch user_speaks_intent_reconginized breakdown by intent (30d, paying users)
+echo "Fetching intent breakdown (30d)..."
+hogql "SELECT e.distinct_id, e.properties.intent as intent, count() as cnt FROM events e INNER JOIN person_distinct_ids pdi ON pdi.distinct_id = e.distinct_id INNER JOIN persons p ON p.id = pdi.person_id WHERE e.event = 'user_speaks_intent_reconginized' AND e.timestamp > now() - INTERVAL 30 DAY AND p.properties.rc_subscription_status IS NOT NULL GROUP BY e.distinct_id, intent LIMIT 50000" > /tmp/ph_intents_30d.json
 
 # 5. Process into groups using node
 echo "Processing data..."
@@ -69,12 +77,16 @@ const devices = JSON.parse(fs.readFileSync('/tmp/ph_devices.json', 'utf8'));
 
 const behaviors = JSON.parse(fs.readFileSync('/tmp/ph_behaviors.json', 'utf8'));
 const behaviorsAll = JSON.parse(fs.readFileSync('/tmp/ph_behaviors_all.json', 'utf8'));
+const intentsAll = JSON.parse(fs.readFileSync('/tmp/ph_intents_all.json', 'utf8'));
+const intents30d = JSON.parse(fs.readFileSync('/tmp/ph_intents_30d.json', 'utf8'));
 
 const personRows = persons.results || [];
 const paymentRows = payments.results || [];
 const deviceRows = devices.results || [];
 const behaviorRows = behaviors.results || [];
 const behaviorAllRows = behaviorsAll.results || [];
+const intentAllRows = intentsAll.results || [];
+const intent30dRows = intents30d.results || [];
 
 // Build device map (first occurrence = latest due to ORDER BY timestamp DESC)
 const deviceMap = {};
@@ -110,6 +122,18 @@ for (const [did, event, cnt] of behaviorAllRows) {
   userBehaviorsAll[did][event] = parseInt(cnt) || 0;
 }
 
+// Build intent stats per user
+const userIntentsAll = {};
+for (const [did, intent, cnt] of intentAllRows) {
+  if (!userIntentsAll[did]) userIntentsAll[did] = {};
+  userIntentsAll[did][intent || 'none'] = parseInt(cnt) || 0;
+}
+const userIntents30d = {};
+for (const [did, intent, cnt] of intent30dRows) {
+  if (!userIntents30d[did]) userIntents30d[did] = {};
+  userIntents30d[did][intent || 'none'] = parseInt(cnt) || 0;
+}
+
 // Categorize users — all paying users regardless of subscription status
 const highValue = [];
 const annual = [];
@@ -125,7 +149,9 @@ for (const [did, status, country, countryCode] of personRows) {
 
   const beh = userBehaviors[did] || {};
   const behAll = userBehaviorsAll[did] || {};
-  const user = { id: did, status, payCount: cnt, revenue: Math.round(rev * 100) / 100, productId: latestProduct[did] || '', country: country || '', countryCode: countryCode || '', device, behaviors: beh, behaviorsAll: behAll };
+  const intAll = userIntentsAll[did] || {};
+  const int30 = userIntents30d[did] || {};
+  const user = { id: did, status, payCount: cnt, revenue: Math.round(rev * 100) / 100, productId: latestProduct[did] || '', country: country || '', countryCode: countryCode || '', device, behaviors: beh, behaviorsAll: behAll, intentsAll: intAll, intents30d: int30 };
 
   if (cnt > 5) {
     highValue.push(user);

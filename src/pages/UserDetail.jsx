@@ -116,7 +116,7 @@ export default function UserDetail() {
         d.framings++
       } else if (event === 'ai_voice_play') {
         d.voicePlays++
-      } else if (event === 'user_speaks_over') {
+      } else if (event === 'user_speaks_intent_reconginized') {
         d.userSpeaks = (d.userSpeaks || 0) + 1
       } else if (event === 'app_opened') {
         d.appOpens++
