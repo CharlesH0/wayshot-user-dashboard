@@ -50,13 +50,13 @@ hogql "SELECT distinct_id, event, timestamp, properties.product_id as product_id
 echo "Fetching device info..."
 hogql 'SELECT distinct_id, properties.$device_model FROM events WHERE event IN ('"'"'app_opened'"'"', '"'"'photo_taken'"'"') AND timestamp > now() - INTERVAL 90 DAY AND properties.$device_model IS NOT NULL ORDER BY timestamp DESC LIMIT 20000' > /tmp/ph_devices.json
 
-# 4. Fetch behavior events (last 30 days)
-echo "Fetching behavior stats (30d)..."
-hogql "SELECT distinct_id, event, count() as cnt FROM events WHERE event IN ('photo_taken','ai_framing_on','ai_voice_play','app_activated','final_page_save_success','home_reimagine_click') AND timestamp > now() - INTERVAL 30 DAY GROUP BY distinct_id, event LIMIT 50000" > /tmp/ph_behaviors.json
+# 4. Fetch behavior events (last 30 days) — only for paying users
+echo "Fetching behavior stats (30d, paying users only)..."
+hogql "SELECT e.distinct_id, e.event, count() as cnt FROM events e INNER JOIN person_distinct_ids pdi ON pdi.distinct_id = e.distinct_id INNER JOIN persons p ON p.id = pdi.person_id WHERE e.event IN ('photo_taken','ai_framing_on','ai_voice_play','app_activated','final_page_save_success','home_reimagine_click') AND e.timestamp > now() - INTERVAL 30 DAY AND p.properties.rc_subscription_status IS NOT NULL GROUP BY e.distinct_id, e.event LIMIT 50000" > /tmp/ph_behaviors.json
 
-# 4b. Fetch behavior events (all time)
-echo "Fetching behavior stats (all time)..."
-hogql "SELECT distinct_id, event, count() as cnt FROM events WHERE event IN ('photo_taken','ai_framing_on','ai_voice_play','app_activated','final_page_save_success','home_reimagine_click') GROUP BY distinct_id, event LIMIT 100000" > /tmp/ph_behaviors_all.json
+# 4b. Fetch behavior events (all time) — only for users with subscription status (paying users)
+echo "Fetching behavior stats (all time, paying users only)..."
+hogql "SELECT e.distinct_id, e.event, count() as cnt FROM events e INNER JOIN person_distinct_ids pdi ON pdi.distinct_id = e.distinct_id INNER JOIN persons p ON p.id = pdi.person_id WHERE e.event IN ('photo_taken','ai_framing_on','ai_voice_play','app_activated','final_page_save_success','home_reimagine_click') AND p.properties.rc_subscription_status IS NOT NULL GROUP BY e.distinct_id, e.event LIMIT 50000" > /tmp/ph_behaviors_all.json
 
 # 5. Process into groups using node
 echo "Processing data..."
