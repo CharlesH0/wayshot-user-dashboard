@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { loadCachedUsers } from '../api'
 
@@ -9,11 +9,34 @@ const TABS = [
   { key: 'other', label: '其他付费用户', emoji: '👤' },
 ]
 
+const STORAGE_KEY_TAB = 'ug_tab'
+const STORAGE_KEY_SCROLL = 'ug_scroll'
+
 export default function UserGroups() {
-  const [tab, setTab] = useState('churned')
+  const [tab, setTab] = useState(() => sessionStorage.getItem(STORAGE_KEY_TAB) || 'churned')
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const listRef = useRef(null)
+  const restoredScroll = useRef(false)
+
+  // Persist tab to sessionStorage
+  const handleTabChange = useCallback((key) => {
+    setTab(key)
+    sessionStorage.setItem(STORAGE_KEY_TAB, key)
+    sessionStorage.removeItem(STORAGE_KEY_SCROLL) // reset scroll on tab switch
+  }, [])
+
+  // Save scroll position before navigating away
+  useEffect(() => {
+    const saveScroll = () => {
+      if (listRef.current) {
+        sessionStorage.setItem(STORAGE_KEY_SCROLL, String(listRef.current.scrollTop))
+      }
+    }
+    window.addEventListener('beforeunload', saveScroll)
+    return () => window.removeEventListener('beforeunload', saveScroll)
+  }, [])
 
   useEffect(() => {
     loadData()
@@ -31,6 +54,23 @@ export default function UserGroups() {
     setLoading(false)
   }
 
+  // Restore scroll position after data loads
+  useEffect(() => {
+    if (!loading && data && listRef.current && !restoredScroll.current) {
+      const saved = sessionStorage.getItem(STORAGE_KEY_SCROLL)
+      if (saved) {
+        listRef.current.scrollTop = parseInt(saved, 10) || 0
+      }
+      restoredScroll.current = true
+    }
+  }, [loading, data])
+
+  const saveScrollPosition = useCallback(() => {
+    if (listRef.current) {
+      sessionStorage.setItem(STORAGE_KEY_SCROLL, String(listRef.current.scrollTop))
+    }
+  }, [])
+
   const groups = data?.groups || {}
   const currentUsers = groups[tab] || []
   const updatedAt = data?.updatedAt ? new Date(data.updatedAt).toLocaleString('zh-CN') : ''
@@ -42,7 +82,7 @@ export default function UserGroups() {
         {TABS.map(t => (
           <button
             key={t.key}
-            onClick={() => setTab(t.key)}
+            onClick={() => handleTabChange(t.key)}
             className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2 cursor-pointer ${
               tab === t.key
                 ? 'bg-orange-500 text-white shadow-md shadow-orange-200'
@@ -91,7 +131,7 @@ export default function UserGroups() {
               <span className="text-xs text-gray-400">数据更新于: {updatedAt}</span>
             )}
           </div>
-          <div className="divide-y divide-gray-50 max-h-[600px] overflow-y-auto">
+          <div ref={listRef} className="divide-y divide-gray-50 max-h-[600px] overflow-y-auto">
             {currentUsers.length === 0 ? (
               <div className="px-5 py-12 text-center text-gray-400">暂无数据</div>
             ) : (
@@ -99,6 +139,7 @@ export default function UserGroups() {
                 <Link
                   key={u.id}
                   to={`/user/${encodeURIComponent(u.id)}`}
+                  onClick={saveScrollPosition}
                   className="flex items-center justify-between px-5 py-3 hover:bg-orange-50 transition group"
                 >
                   <div className="flex items-center gap-3">
