@@ -1,48 +1,34 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { loadCachedUsers } from '../api'
 
-const TABS = [
-  { key: 'highValue', label: '高价值付费用户', emoji: '💎' },
-  { key: 'annual', label: '年费用户', emoji: '📅' },
-  { key: 'other', label: '其他付费用户', emoji: '👤' },
-]
+const GROUP_META = {
+  highValue: { label: '高价值付费用户', emoji: '💎' },
+  annual: { label: '年费用户', emoji: '📅' },
+  other: { label: '其他付费用户', emoji: '👤' },
+}
 
-const STORAGE_KEY_TAB = 'ug_tab'
 const STORAGE_KEY_SCROLL = 'ug_scroll'
 
 export default function UserGroups() {
-  const [tab, setTab] = useState(() => {
-    const saved = sessionStorage.getItem(STORAGE_KEY_TAB)
-    return saved && saved !== 'churned' ? saved : 'highValue'
-  })
+  const { groupKey } = useParams()
+  const meta = GROUP_META[groupKey] || { label: '用户列表', emoji: '👥' }
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const listRef = useRef(null)
   const restoredScroll = useRef(false)
 
-  // Persist tab to sessionStorage
-  const handleTabChange = useCallback((key) => {
-    setTab(key)
-    sessionStorage.setItem(STORAGE_KEY_TAB, key)
-    sessionStorage.removeItem(STORAGE_KEY_SCROLL) // reset scroll on tab switch
-  }, [])
-
-  // Save scroll position before navigating away
-  useEffect(() => {
-    const saveScroll = () => {
-      if (listRef.current) {
-        sessionStorage.setItem(STORAGE_KEY_SCROLL, String(listRef.current.scrollTop))
-      }
-    }
-    window.addEventListener('beforeunload', saveScroll)
-    return () => window.removeEventListener('beforeunload', saveScroll)
-  }, [])
-
   useEffect(() => {
     loadData()
   }, [])
+
+  // Reset scroll on group change
+  useEffect(() => {
+    restoredScroll.current = false
+    sessionStorage.removeItem(STORAGE_KEY_SCROLL)
+    if (listRef.current) listRef.current.scrollTop = 0
+  }, [groupKey])
 
   async function loadData() {
     setLoading(true)
@@ -74,33 +60,42 @@ export default function UserGroups() {
   }, [])
 
   const groups = data?.groups || {}
-  const currentUsers = groups[tab] || []
+  const currentUsers = groups[groupKey] || []
   const updatedAt = data?.updatedAt ? new Date(data.updatedAt).toLocaleString('zh-CN') : ''
+
+  // Group tabs for switching between groups
+  const allGroups = Object.entries(GROUP_META)
 
   return (
     <div>
-      {/* Tabs */}
+      {/* Group header */}
+      <div className="flex items-center gap-3 mb-4">
+        <span className="text-2xl">{meta.emoji}</span>
+        <h2 className="text-lg font-bold text-gray-800">{meta.label}</h2>
+      </div>
+
+      {/* Tabs for quick switching */}
       <div className="flex gap-2 mb-6 flex-wrap">
-        {TABS.map(t => (
-          <button
-            key={t.key}
-            onClick={() => handleTabChange(t.key)}
-            className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2 cursor-pointer ${
-              tab === t.key
+        {allGroups.map(([key, m]) => (
+          <Link
+            key={key}
+            to={`/groups/${key}`}
+            className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
+              groupKey === key
                 ? 'bg-orange-500 text-white shadow-md shadow-orange-200'
                 : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
             }`}
           >
-            <span>{t.emoji}</span>
-            <span>{t.label}</span>
-            {groups[t.key] && (
+            <span>{m.emoji}</span>
+            <span>{m.label}</span>
+            {groups[key] && (
               <span className={`ml-1 px-2 py-0.5 rounded-full text-xs font-bold ${
-                tab === t.key ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-500'
+                groupKey === key ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-500'
               }`}>
-                {groups[t.key].length}
+                {groups[key].length}
               </span>
             )}
-          </button>
+          </Link>
         ))}
       </div>
 
