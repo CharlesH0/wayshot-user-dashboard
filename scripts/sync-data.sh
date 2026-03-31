@@ -83,16 +83,14 @@ for (const [did, event, ts, pid, rev] of paymentRows) {
   paymentHistory[did].push({ event, time: ts, productId: pid || '', revenue: parseFloat(rev) || 0 });
 }
 
-// Categorize users
-const churned = [];
+// Categorize users — all paying users regardless of subscription status
 const highValue = [];
 const annual = [];
 const other = [];
 
-const churnedStatuses = new Set(['cancelled', 'expired', 'cancelled_trial', 'expired_promotional']);
-
 for (const [did, status, country, countryCode] of personRows) {
   const cnt = payCounts[did] || 0;
+  if (cnt === 0) continue; // skip users with no payment history
   const rev = totalRevenue[did] || 0;
   const pid = (latestProduct[did] || '').toLowerCase();
   const isYearly = pid.includes('yearly') || pid.includes('annual') || pid.includes('year');
@@ -100,30 +98,26 @@ for (const [did, status, country, countryCode] of personRows) {
 
   const user = { id: did, status, payCount: cnt, revenue: Math.round(rev * 100) / 100, productId: latestProduct[did] || '', country: country || '', countryCode: countryCode || '', device };
 
-  if (churnedStatuses.has(status)) {
-    if (cnt > 0) churned.push(user);
-  } else if (status === 'active') {
-    if (cnt > 5) {
-      highValue.push(user);
-    } else if (isYearly) {
-      annual.push(user);
-    } else {
-      other.push(user);
-    }
+  if (cnt > 5) {
+    highValue.push(user);
+  } else if (isYearly) {
+    annual.push(user);
+  } else {
+    other.push(user);
   }
 }
 
 // Sort by revenue descending
-[churned, highValue, annual, other].forEach(arr => arr.sort((a, b) => b.revenue - a.revenue));
+[highValue, annual, other].forEach(arr => arr.sort((a, b) => b.revenue - a.revenue));
 
 const output = {
   updatedAt: new Date().toISOString(),
-  groups: { churned, highValue, annual, other },
+  groups: { highValue, annual, other },
   paymentHistory
 };
 
 fs.writeFileSync('${DATA_DIR}/users.json', JSON.stringify(output));
-console.log('Churned:', churned.length, 'High-value:', highValue.length, 'Annual:', annual.length, 'Other:', other.length);
+console.log('High-value:', highValue.length, 'Annual:', annual.length, 'Other:', other.length);
 "
 
 echo "[$(date)] Sync complete. Output: ${DATA_DIR}/users.json"

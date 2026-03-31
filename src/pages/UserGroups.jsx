@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { loadCachedUsers } from '../api'
 
 const TABS = [
-  { key: 'churned', label: '已流失付费用户', emoji: '💔' },
   { key: 'highValue', label: '高价值付费用户', emoji: '💎' },
   { key: 'annual', label: '年费用户', emoji: '📅' },
   { key: 'other', label: '其他付费用户', emoji: '👤' },
@@ -13,7 +12,10 @@ const STORAGE_KEY_TAB = 'ug_tab'
 const STORAGE_KEY_SCROLL = 'ug_scroll'
 
 export default function UserGroups() {
-  const [tab, setTab] = useState(() => sessionStorage.getItem(STORAGE_KEY_TAB) || 'churned')
+  const [tab, setTab] = useState(() => {
+    const saved = sessionStorage.getItem(STORAGE_KEY_TAB)
+    return saved && saved !== 'churned' ? saved : 'highValue'
+  })
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
