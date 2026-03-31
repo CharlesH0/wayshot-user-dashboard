@@ -75,16 +75,29 @@ export default function UserDetail() {
       .map(d => ({ day: d.day, 拍照: d['拍照'] || 0, 保存: d['保存'] || 0, 首页上传: d['首页上传'] || 0, 付费: d['付费'] || 0 }))
   }
 
-  // All events grouped by date — unified timeline
-  const activityByDate = useMemo(() => {
+  // Payment timeline (付费时间线)
+  const paymentTimeline = useMemo(() => {
+    const items = []
+    for (const e of events) {
+      const [event, time, , productId, revenue] = e
+      if (PAY_EVENTS.has(event)) {
+        items.push({ date: formatDate(time), time: timeOnly(time), label: PAY_LABELS[event] || event, revenue: parseFloat(revenue) || 0, productId: productId || '', ts: time })
+      }
+    }
+    return items.sort((a, b) => new Date(b.ts) - new Date(a.ts))
+  }, [events])
+
+  // Behavior timeline (行为时间线) — grouped by date, excluding payment events
+  const behaviorByDate = useMemo(() => {
     const dateMap = {}
     for (const e of events) {
-      const [event, time, filterName, productId, revenue] = e
+      const [event, time, filterName] = e
+      if (PAY_EVENTS.has(event)) continue
       const dateKey = formatDate(time)
       if (!dateMap[dateKey]) dateMap[dateKey] = {
         date: dateKey, photos: 0, saves: 0, uploads: 0,
-        activations: 0, framings: 0, voicePlays: 0,
-        payments: [], totalEvents: 0, firstTime: time, lastTime: time,
+        activations: 0, framings: 0, voicePlays: 0, appOpens: 0,
+        totalEvents: 0, firstTime: time, lastTime: time,
         hasFilter: 0, noFilter: 0
       }
       const d = dateMap[dateKey]
@@ -103,8 +116,8 @@ export default function UserDetail() {
         d.framings++
       } else if (event === 'ai_voice_play') {
         d.voicePlays++
-      } else if (PAY_EVENTS.has(event)) {
-        d.payments.push({ label: PAY_LABELS[event] || event, revenue: parseFloat(revenue) || 0, productId: productId || '' })
+      } else if (event === 'app_opened') {
+        d.appOpens++
       }
       if (new Date(time) < new Date(d.firstTime)) d.firstTime = time
       if (new Date(time) > new Date(d.lastTime)) d.lastTime = time
@@ -170,6 +183,8 @@ export default function UserDetail() {
                 props?.status === 'cancelled' ? 'bg-red-100 text-red-600' :
                 'bg-gray-100 text-gray-500'
               }`}>{props?.status || 'unknown'}</span>
+              {props?.country && <span className="px-2.5 py-1 rounded-full text-xs bg-amber-50 text-amber-600">🌍 {props.country}</span>}
+              {props?.device && <span className="px-2.5 py-1 rounded-full text-xs bg-cyan-50 text-cyan-600">📱 {props.device}</span>}
               {props?.utm && <span className="px-2.5 py-1 rounded-full text-xs bg-blue-50 text-blue-600">{props.utm}</span>}
               {props?.domain && <span className="px-2.5 py-1 rounded-full text-xs bg-purple-50 text-purple-600">{props.domain}</span>}
             </div>
@@ -191,52 +206,81 @@ export default function UserDetail() {
         </div>
       </div>
 
-      {/* Unified Activity Timeline (all events by date) */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
-          <h3 className="font-semibold text-gray-700 flex items-center gap-2">
-            📅 行为时间线
-            <span className="text-xs text-gray-400 font-normal">共 {activityByDate.length} 天有活动</span>
-          </h3>
-        </div>
-        <div className="p-5 space-y-1 max-h-[600px] overflow-y-auto">
-          {activityByDate.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-8">暂无活动记录</p>
-          ) : (
-            activityByDate.map(d => (
-              <div key={d.date} className={`py-3 px-4 rounded-lg transition ${d.isPeak ? 'bg-red-50 border-2 border-dashed border-red-300' : 'hover:bg-gray-50'}`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {d.isPeak && <span>🔥</span>}
-                    <span className="text-sm font-semibold text-gray-700">{d.date}</span>
-                    <span className="text-xs text-gray-400">
-                      {timeOnly(d.firstTime)} — {timeOnly(d.lastTime)}
-                    </span>
+      {/* Two-column: Payment Timeline + Behavior Timeline */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Payment Timeline */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+          <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
+            <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+              💰 付费时间线
+              <span className="text-xs text-gray-400 font-normal">共 {paymentTimeline.length} 笔</span>
+            </h3>
+          </div>
+          <div className="p-4 space-y-2 max-h-[600px] overflow-y-auto">
+            {paymentTimeline.length === 0 ? (
+              <p className="text-gray-400 text-sm text-center py-8">暂无付费记录</p>
+            ) : (
+              paymentTimeline.map((p, i) => (
+                <div key={i} className="flex items-center gap-3 py-2.5 px-3 rounded-lg hover:bg-orange-50 transition">
+                  <div className="w-2 h-2 rounded-full bg-orange-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700">{p.label}</span>
+                      <span className="text-sm font-bold text-orange-500">${p.revenue.toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-xs text-gray-400">{p.date} {p.time}</span>
+                      {p.productId && <span className="text-xs text-gray-300 truncate">{p.productId}</span>}
+                    </div>
                   </div>
-                  <span className="text-xs text-gray-400">{d.totalEvents} 事件</span>
                 </div>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs">
-                  {d.activations > 0 && <span className="text-sky-600">🚀 激活 {d.activations}次</span>}
-                  {d.photos > 0 && (
-                    <span className="text-blue-600">
-                      📸 拍照 {d.photos}张
-                      {d.hasFilter > 0 && <span className="text-blue-400 ml-1">({d.hasFilter}张用滤镜)</span>}
-                    </span>
-                  )}
-                  {d.framings > 0 && <span className="text-indigo-600">🎯 构图 {d.framings}次</span>}
-                  {d.voicePlays > 0 && <span className="text-teal-600">🎙️ 语音 {d.voicePlays}次</span>}
-                  {d.uploads > 0 && <span className="text-purple-600">🖼️ 上传 {d.uploads}张</span>}
-                  {d.saves > 0 && <span className="text-green-600">💾 保存 {d.saves}张</span>}
-                  {d.payments.map((pay, pi) => (
-                    <span key={pi} className="text-orange-600 font-medium">
-                      💰 {pay.label} ${pay.revenue.toFixed(2)}
-                      {pay.productId && <span className="text-orange-400 font-normal ml-1">({pay.productId})</span>}
-                    </span>
-                  ))}
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Behavior Timeline */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+          <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
+            <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+              📅 行为时间线
+              <span className="text-xs text-gray-400 font-normal">共 {behaviorByDate.length} 天有活动</span>
+            </h3>
+          </div>
+          <div className="p-4 space-y-1 max-h-[600px] overflow-y-auto">
+            {behaviorByDate.length === 0 ? (
+              <p className="text-gray-400 text-sm text-center py-8">暂无活动记录</p>
+            ) : (
+              behaviorByDate.map(d => (
+                <div key={d.date} className={`py-3 px-3 rounded-lg transition ${d.isPeak ? 'bg-red-50 border-2 border-dashed border-red-300' : 'hover:bg-gray-50'}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {d.isPeak && <span>🔥</span>}
+                      <span className="text-sm font-semibold text-gray-700">{d.date}</span>
+                      <span className="text-xs text-gray-400">
+                        {timeOnly(d.firstTime)} — {timeOnly(d.lastTime)}
+                      </span>
+                    </div>
+                    <span className="text-xs text-gray-400">{d.totalEvents} 事件</span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5 text-xs">
+                    {d.activations > 0 && <span className="text-sky-600">🚀 激活 {d.activations}</span>}
+                    {d.appOpens > 0 && <span className="text-gray-500">📱 打开 {d.appOpens}</span>}
+                    {d.photos > 0 && (
+                      <span className="text-blue-600">
+                        📸 拍照 {d.photos}
+                        {d.hasFilter > 0 && <span className="text-blue-400 ml-0.5">({d.hasFilter}滤镜)</span>}
+                      </span>
+                    )}
+                    {d.framings > 0 && <span className="text-indigo-600">🎯 构图 {d.framings}</span>}
+                    {d.voicePlays > 0 && <span className="text-teal-600">🎙️ 语音 {d.voicePlays}</span>}
+                    {d.uploads > 0 && <span className="text-purple-600">🖼️ 上传 {d.uploads}</span>}
+                    {d.saves > 0 && <span className="text-green-600">💾 保存 {d.saves}</span>}
+                  </div>
                 </div>
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
         </div>
       </div>
 

@@ -28,32 +28,46 @@ mkdir -p "$DATA_DIR"
 
 hogql() {
   local query="$1"
+  local payload
+  payload=$(jq -nc --arg q "$query" '{"query":{"kind":"HogQLQuery","query":$q}}')
   curl -s -X POST "${API_HOST}/api/projects/${PROJECT_ID}/query/" \
     -H "Authorization: Bearer ${API_KEY}" \
     -H "Content-Type: application/json" \
-    -d "{\"query\":{\"kind\":\"HogQLQuery\",\"query\":\"$query\"}}"
+    -d "$payload"
 }
 
 echo "[$(date)] Starting PostHog data sync..."
 
 # 1. Fetch all persons with subscription status (with distinct_id via join)
 echo "Fetching persons..."
-hogql "SELECT pdi.distinct_id, properties.rc_subscription_status as status FROM persons INNER JOIN person_distinct_ids pdi ON pdi.person_id = id WHERE properties.rc_subscription_status IS NOT NULL AND properties.rc_subscription_status != '' LIMIT 5000" > /tmp/ph_persons.json
+hogql 'SELECT pdi.distinct_id, properties.rc_subscription_status as status, properties.$geoip_country_name as country, properties.$geoip_country_code as country_code FROM persons INNER JOIN person_distinct_ids pdi ON pdi.person_id = id WHERE properties.rc_subscription_status IS NOT NULL LIMIT 5000' > /tmp/ph_persons.json
 
 # 2. Fetch payment events (all time) - distinct_id, event, timestamp, product_id, revenue
 echo "Fetching payment events..."
 hogql "SELECT distinct_id, event, timestamp, properties.product_id as product_id, properties.revenue as revenue FROM events WHERE event IN ('rc_initial_purchase_event','rc_trial_converted_event','rc_renewal_event','rc_non_subscription_purchase_event') ORDER BY timestamp DESC LIMIT 10000" > /tmp/ph_payments.json
 
-# 3. Process into groups using node
+# 3. Fetch latest device model per user
+echo "Fetching device info..."
+hogql 'SELECT distinct_id, properties.$device_model FROM events WHERE event IN ('"'"'app_opened'"'"', '"'"'photo_taken'"'"') AND timestamp > now() - INTERVAL 90 DAY AND properties.$device_model IS NOT NULL ORDER BY timestamp DESC LIMIT 20000' > /tmp/ph_devices.json
+
+# 4. Process into groups using node
 echo "Processing data..."
 node -e "
 const fs = require('fs');
 
 const persons = JSON.parse(fs.readFileSync('/tmp/ph_persons.json', 'utf8'));
 const payments = JSON.parse(fs.readFileSync('/tmp/ph_payments.json', 'utf8'));
+const devices = JSON.parse(fs.readFileSync('/tmp/ph_devices.json', 'utf8'));
 
 const personRows = persons.results || [];
 const paymentRows = payments.results || [];
+const deviceRows = devices.results || [];
+
+// Build device map (first occurrence = latest due to ORDER BY timestamp DESC)
+const deviceMap = {};
+for (const [did, model] of deviceRows) {
+  if (!deviceMap[did] && model) deviceMap[did] = model;
+}
 
 // Build payment counts and latest product per user
 const payCounts = {};
@@ -77,13 +91,14 @@ const other = [];
 
 const churnedStatuses = new Set(['cancelled', 'expired', 'cancelled_trial', 'expired_promotional']);
 
-for (const [did, status] of personRows) {
+for (const [did, status, country, countryCode] of personRows) {
   const cnt = payCounts[did] || 0;
   const rev = totalRevenue[did] || 0;
   const pid = (latestProduct[did] || '').toLowerCase();
   const isYearly = pid.includes('yearly') || pid.includes('annual') || pid.includes('year');
+  const device = deviceMap[did] || '';
 
-  const user = { id: did, status, payCount: cnt, revenue: Math.round(rev * 100) / 100, productId: latestProduct[did] || '' };
+  const user = { id: did, status, payCount: cnt, revenue: Math.round(rev * 100) / 100, productId: latestProduct[did] || '', country: country || '', countryCode: countryCode || '', device };
 
   if (churnedStatuses.has(status)) {
     if (cnt > 0) churned.push(user);

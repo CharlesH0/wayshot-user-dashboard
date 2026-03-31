@@ -142,15 +142,21 @@ export default function UserGroups() {
                   onClick={saveScrollPosition}
                   className="flex items-center justify-between px-5 py-3 hover:bg-orange-50 transition group"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-amber-300 flex items-center justify-center text-white text-xs font-bold shadow-sm">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-amber-300 flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0">
                       {u.id.slice(0, 2).toUpperCase()}
                     </div>
-                    <span className="text-sm font-mono text-gray-700 group-hover:text-orange-600 transition">
-                      {u.id.length > 40 ? u.id.slice(0, 20) + '...' + u.id.slice(-10) : u.id}
-                    </span>
+                    <div className="min-w-0">
+                      <span className="text-sm font-mono text-gray-700 group-hover:text-orange-600 transition block truncate">
+                        {u.id.length > 40 ? u.id.slice(0, 20) + '...' + u.id.slice(-10) : u.id}
+                      </span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {u.country && <span className="text-xs text-gray-400">{u.countryCode ? `${u.countryCode}` : u.country}</span>}
+                        {u.device && <span className="text-xs text-gray-400">{u.device}</span>}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 shrink-0">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                       u.status === 'active' ? 'bg-green-100 text-green-700' :
                       u.status === 'cancelled' ? 'bg-red-100 text-red-600' :
